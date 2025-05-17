@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private boolean isProcessingFrame = false;
     private boolean isCameraMode = false;
     //ip변경부분
-    final String connectUrl="https://97f1-223-194-133-239.ngrok-free.app";
+    final String connectUrl="https://6678-49-170-80-119.ngrok-free.app";
     private Socket mSocket;
 
     // 지금까지 본 모든 사람 ID들
@@ -1377,7 +1377,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
 
         // 각 객체에 대해 가상 선과의 교차 확인
         for (SimpleTracker.TrackedObject obj : trackedObjects) {
-            if (obj.getConfidence() >= 0.7f && ("cup".equals(obj.getLabel())||"laptop".equals(obj.getLabel()) )) {
+            if (obj.getConfidence() >= 0.7f && ("cup".equals(obj.getLabel()) || "apple".equals(obj.getLabel()) || "banana".equals(obj.getLabel()) )) {
                 int objectId = obj.getId();
 
                 // 객체의 중심점 계산 캔버스에서의위치인것
