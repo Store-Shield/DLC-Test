@@ -65,7 +65,6 @@ dependencies {
     implementation ("io.socket:socket.io-client:2.0.0")
     implementation(files("libs/snpe-release.aar"))
     // 스냅드래곤 DSP Runtime
-    implementation(files("libs/snpe-dsp-release.aar"))
     implementation(files("libs/qtld-release.aar"))
     implementation(files("libs/psnpe-release.aar"))
     implementation(files("libs/platform-validator.aar"))
@@ -73,6 +72,6 @@ dependencies {
     // TensorFlow Lite 의존성 추가
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.3")
-    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.3")
+//    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.3")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.12.0") // GPU 가속 사용시
 }
