@@ -88,10 +88,13 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private SimpleTracker tracker;
 
     // TFLite 모델을 로드하고 관리하는 클래스 인스턴스
-    private TFLiteLoader tfliteLoader;
+
     private TFLiteLoader tfliteLoaderface;
+
+    // TFLite 모델 로더 인스턴스 선언부분 근처에 추가
+    private DLCLoader dlcLoader;
+    private DLCImageProcessor dlcImageProcessor;
     // 이미지 처리 및 객체 탐지를 담당하는 클래스 인스턴스
-    private YoloImageProcessor imageProcessor;
 
     // UI 요소들
     // 이미지 선택 버튼
@@ -240,38 +243,29 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         // 필요한 권한(저장소 읽기/쓰기, 카메라) 확인 및 요청
         checkAndRequestPermissions();
 
-        // TFLite 모델 로더 인스턴스 생성
-        tfliteLoader = new TFLiteLoader(this,"yolonas_quantized.tflite");
-
-
-        // TFLite 모델 로더 인스턴스 생성
-        tfliteLoaderface = new TFLiteLoader(this,"face_det_lite_quantized.tflite");
-        // assets 폴더에서 모델 로드 시도
-        if (tfliteLoader.loadModelFromAssets()) {
-            // 모델 로드 성공 시 로그 출력 및 토스트 메시지 표시
-            Log.i("yolo", "YOLONas TFLite 모델이 성공적으로 로드되었습니다.");
-            Toast.makeText(this, "yolo 모델 로드 성공!", Toast.LENGTH_SHORT).show();
-
-            // 이미지 프로세서 초기화 - 로드된 인터프리터 전달
-            imageProcessor = new YoloImageProcessor(this, tfliteLoader.getTfliteInterpreter());
-        } else {
-            // 모델 로드 실패 시 로그 출력 및 토스트 메시지 표시
-            Log.e(TAG, "YOLONas TFLite 모델 로드에 실패했습니다.");
-            Toast.makeText(this, "yolo 모델 로드 실패!", Toast.LENGTH_SHORT).show();
-        }
-
+        tfliteLoaderface = new TFLiteLoader(this, "face_det_lite_quantized.tflite");
         if (tfliteLoaderface.loadModelFromAssets()) {
-            // 모델 로드 성공 시 로그 출력 및 토스트 메시지 표시
             Log.i("face", "Face TFLite 모델이 성공적으로 로드되었습니다.");
             Toast.makeText(this, "face 모델 로드 성공!", Toast.LENGTH_SHORT).show();
             // FaceDetector 초기화
             faceDetector = new FaceDetector(this, tfliteLoaderface.getTfliteInterpreter());
         } else {
-            // 모델 로드 실패 시 로그 출력 및 토스트 메시지 표시
             Log.e("face", "Face TFLite 모델 로드에 실패했습니다.");
             Toast.makeText(this, "face 모델 로드 실패!", Toast.LENGTH_SHORT).show();
         }
 
+// YOLO용 DLC 모델 로드로 변경
+        dlcLoader = new DLCLoader(this, "yolonas.dlc");
+        if (dlcLoader.loadModelFromAssets()) {
+            Log.i("dlcCheck", "YOLONas DLC 모델이 성공적으로 로드되었습니다.");
+            Toast.makeText(this, "YOLO DLC 모델 로드 성공!", Toast.LENGTH_SHORT).show();
+
+            // DLC 이미지 프로세서 초기화
+            dlcImageProcessor = new DLCImageProcessor(this, dlcLoader.getNeuralNetwork());
+        } else {
+            Log.e("dlcCheck", "YOLONas DLC 모델 로드에 실패했습니다.");
+            Toast.makeText(this, "YOLO DLC 모델 로드 실패!", Toast.LENGTH_SHORT).show();
+        }
 
         // 카메라 시작 버튼 클릭 이벤트 설정
         btnStartCamera.setOnClickListener(v -> {
@@ -812,7 +806,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     }
 
     private void processFrameForOverlay(Bitmap bitmap) {
-        if (imageProcessor != null) {
+        if (dlcImageProcessor  != null) {
             new Thread(() -> {
                 // 객체 탐지 및 추적 수행
 
@@ -827,7 +821,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 List<YoloImageProcessor.Detection> detections;
                 synchronized (imageLock){
                     long anlstartTime = System.currentTimeMillis();
-                    detections=imageProcessor.processImage(bitmap);
+                    detections=dlcImageProcessor.processImage(bitmap);
                     long anlendTime = System.currentTimeMillis();
                     Log.i("worktime","imageProcessor processImage 작업시간 : "+(anlendTime-anlstartTime));
 
@@ -991,7 +985,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
 
                     List<YoloImageProcessor.Detection> detections;
                     synchronized (imageLock){
-                        detections=imageProcessor.processImage(currentBitmap);
+                        detections=dlcImageProcessor.processImage(currentBitmap);
                     }
                     final List<SimpleTracker.TrackedObject> trackedObjects = tracker.update(detections);
 
@@ -1512,7 +1506,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                             final List<SimpleTracker.TrackedObject> trackedObjects;
                             List<YoloImageProcessor.Detection> detections;
                             synchronized (imageLock){
-                                detections=imageProcessor.processImage(bitmap);
+                                detections=dlcImageProcessor.processImage(bitmap);
                                 trackedObjects = tracker.update(detections);
                             }
 
@@ -1767,8 +1761,13 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onDestroy() {
         // TFLite 모델 리소스 해제
-        if (tfliteLoader != null) {
-            tfliteLoader.close();
+
+        if (tfliteLoaderface != null) {
+            tfliteLoaderface.close();
+        }
+        // DLC 모델 리소스 해제
+        if (dlcLoader != null) {
+            dlcLoader.close();
         }
         super.onDestroy();
     }
