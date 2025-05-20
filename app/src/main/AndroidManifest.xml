@@ -6,7 +6,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-
+    <!-- OpenGL ES 3.0+ 지원 명시 -->
+    <uses-feature android:glEsVersion="0x00030000" android:required="false" />
+    <uses-feature android:name="android.hardware.opengles.aep" android:required="false" />
 
     <!-- 필요한 권한 추가 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -25,9 +27,25 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Quantiztest"
-        tools:targetApi="31">
+        tools:targetApi="31"
+
+        android:hardwareAccelerated="true"
+        >
+
+        <!-- 네이티브 라이브러리 추출 설정 -->
+        <meta-data
+            android:name="android.app.extractNativeLibs"
+            android:value="true" />
+
+        <!-- OpenGL 가속 설정 -->
+        <meta-data
+            android:name="android.hardware.opengles.version"
+            android:value="0x00030000" />
+
+
         <activity
             android:name=".MainActivity"
+            android:hardwareAccelerated="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

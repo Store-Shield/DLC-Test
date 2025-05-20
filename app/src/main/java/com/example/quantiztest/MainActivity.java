@@ -2,6 +2,11 @@ package com.example.quantiztest;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.ConfigurationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -45,7 +50,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -88,10 +98,9 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     private SimpleTracker tracker;
 
     // TFLite 모델을 로드하고 관리하는 클래스 인스턴스
-    private TFLiteLoader tfliteLoader;
-    private TFLiteLoader tfliteLoaderface;
-    // 이미지 처리 및 객체 탐지를 담당하는 클래스 인스턴스
-    private YoloImageProcessor imageProcessor;
+    private TFLiteLoader tfliteLoaderface; // Face 감지를 위한 TFLite (변경 없음)
+    private DLCLoader dlcLoader; // DLC 로더 추가
+    private YoloDLCImageProcessor dlcImageProcessor; // DLC 이미지 프로세서 추가
 
     // UI 요소들
     // 이미지 선택 버튼
@@ -153,6 +162,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         super.onCreate((Bundle) savedInstanceState);
         // 레이아웃 설정
         setContentView(R.layout.activity_main);
+        collectSystemLibraryInfo();
 
         // 이벤트 표시용 TextView 추가
         tvEvent = new TextView(this);
@@ -240,25 +250,10 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
         // 필요한 권한(저장소 읽기/쓰기, 카메라) 확인 및 요청
         checkAndRequestPermissions();
 
-        // TFLite 모델 로더 인스턴스 생성
-        tfliteLoader = new TFLiteLoader(this,"yolonas_quantized.tflite");
 
 
         // TFLite 모델 로더 인스턴스 생성
         tfliteLoaderface = new TFLiteLoader(this,"face_det_lite_quantized.tflite");
-        // assets 폴더에서 모델 로드 시도
-        if (tfliteLoader.loadModelFromAssets()) {
-            // 모델 로드 성공 시 로그 출력 및 토스트 메시지 표시
-            Log.i("yolo", "YOLONas TFLite 모델이 성공적으로 로드되었습니다.");
-            Toast.makeText(this, "yolo 모델 로드 성공!", Toast.LENGTH_SHORT).show();
-
-            // 이미지 프로세서 초기화 - 로드된 인터프리터 전달
-            imageProcessor = new YoloImageProcessor(this, tfliteLoader.getTfliteInterpreter());
-        } else {
-            // 모델 로드 실패 시 로그 출력 및 토스트 메시지 표시
-            Log.e(TAG, "YOLONas TFLite 모델 로드에 실패했습니다.");
-            Toast.makeText(this, "yolo 모델 로드 실패!", Toast.LENGTH_SHORT).show();
-        }
 
         if (tfliteLoaderface.loadModelFromAssets()) {
             // 모델 로드 성공 시 로그 출력 및 토스트 메시지 표시
@@ -270,6 +265,19 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
             // 모델 로드 실패 시 로그 출력 및 토스트 메시지 표시
             Log.e("face", "Face TFLite 모델 로드에 실패했습니다.");
             Toast.makeText(this, "face 모델 로드 실패!", Toast.LENGTH_SHORT).show();
+        }
+
+        dlcLoader = new DLCLoader(this, "yolonas.dlc");
+        // YOLONas DLC 모델 로드
+        if (dlcLoader.loadModelFromAssets()) {
+            Log.i("yolo", "YOLONas DLC 모델이 성공적으로 로드되었습니다.");
+            Toast.makeText(this, "yolo DLC 모델 로드 성공!", Toast.LENGTH_SHORT).show();
+
+            // DLC 이미지 프로세서 초기화
+            dlcImageProcessor = new YoloDLCImageProcessor(this, dlcLoader.getNeuralNetwork());
+        } else {
+            Log.e(TAG, "YOLONas DLC 모델 로드에 실패했습니다.");
+            Toast.makeText(this, "yolo DLC 모델 로드 실패!", Toast.LENGTH_SHORT).show();
         }
 
 
@@ -812,7 +820,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     }
 
     private void processFrameForOverlay(Bitmap bitmap) {
-        if (imageProcessor != null) {
+        if (dlcImageProcessor  != null) {
             new Thread(() -> {
                 // 객체 탐지 및 추적 수행
 
@@ -827,7 +835,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                 List<YoloImageProcessor.Detection> detections;
                 synchronized (imageLock){
                     long anlstartTime = System.currentTimeMillis();
-                    detections=imageProcessor.processImage(bitmap);
+                    detections=dlcImageProcessor .processImage(bitmap);
                     long anlendTime = System.currentTimeMillis();
                     Log.i("worktime","imageProcessor processImage 작업시간 : "+(anlendTime-anlstartTime));
 
@@ -991,7 +999,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
 
                     List<YoloImageProcessor.Detection> detections;
                     synchronized (imageLock){
-                        detections=imageProcessor.processImage(currentBitmap);
+                        detections=dlcImageProcessor.processImage(currentBitmap);
                     }
                     final List<SimpleTracker.TrackedObject> trackedObjects = tracker.update(detections);
 
@@ -1512,7 +1520,7 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
                             final List<SimpleTracker.TrackedObject> trackedObjects;
                             List<YoloImageProcessor.Detection> detections;
                             synchronized (imageLock){
-                                detections=imageProcessor.processImage(bitmap);
+                                detections=dlcImageProcessor.processImage(bitmap);
                                 trackedObjects = tracker.update(detections);
                             }
 
@@ -1767,9 +1775,121 @@ public class MainActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onDestroy() {
         // TFLite 모델 리소스 해제
-        if (tfliteLoader != null) {
-            tfliteLoader.close();
+        // DLC 모델 리소스 해제
+        if (dlcLoader != null) {
+            dlcLoader.close();
         }
         super.onDestroy();
+    }
+
+
+    private void collectSystemLibraryInfo() {
+        try {
+            Log.d(TAG, "== 시스템 라이브러리 진단 시작 ==");
+
+            // 시스템 라이브러리 경로
+            String[] systemLibPaths = {
+                    "/vendor/lib64",
+                    "/system/lib64",
+                    "/system/vendor/lib64"
+            };
+
+            // OpenCL 라이브러리 확인
+            for (String path : systemLibPaths) {
+                File dir = new File(path);
+                if (dir.exists() && dir.isDirectory()) {
+                    Log.d(TAG, "시스템 라이브러리 디렉토리 확인: " + path);
+                    File[] files = dir.listFiles();
+                    if (files != null) {
+                        for (File file : files) {
+                            if (file.getName().contains("OpenCL")) {
+                                Log.d(TAG, "OpenCL 관련 라이브러리 발견: " + file.getAbsolutePath() + " (" + file.length() + " 바이트)");
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 직접 라이브러리 로드 시도
+            try {
+                System.loadLibrary("SNPE");
+                Log.d(TAG, "System.loadLibrary로 SNPE 라이브러리 로드 성공");
+            } catch (UnsatisfiedLinkError e) {
+                Log.e(TAG, "SNPE 라이브러리 로드 실패: " + e.getMessage());
+            }
+
+            try {
+                System.loadLibrary("OpenCL");
+                Log.d(TAG, "System.loadLibrary로 OpenCL 라이브러리 로드 성공");
+            } catch (UnsatisfiedLinkError e) {
+                Log.e(TAG, "OpenCL 라이브러리 로드 실패: " + e.getMessage());
+            }
+
+            // 시스템 속성 확인
+            try {
+                String openglVersion = getString(R.string.app_name); // 임시 문자열 초기화
+                ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                ConfigurationInfo configInfo = activityManager.getDeviceConfigurationInfo();
+                openglVersion = configInfo.getGlEsVersion();
+                Log.d(TAG, "OpenGL ES 버전: " + openglVersion);
+
+                int majorVersion = ((int) configInfo.reqGlEsVersion & 0xffff0000) >> 16;
+                int minorVersion = ((int) configInfo.reqGlEsVersion & 0x0000ffff);
+                Log.d(TAG, "OpenGL ES 주/부 버전: " + majorVersion + "." + minorVersion);
+            } catch (Exception e) {
+                Log.e(TAG, "OpenGL 버전 확인 중 오류: " + e.getMessage());
+            }
+
+            // CPU 정보 확인
+            try {
+                Process process = Runtime.getRuntime().exec("cat /proc/cpuinfo");
+                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                String line;
+                StringBuilder cpuInfo = new StringBuilder();
+                int lineCount = 0;
+                while ((line = reader.readLine()) != null && lineCount < 10) {
+                    cpuInfo.append(line).append("\n");
+                    lineCount++;
+                }
+                reader.close();
+                Log.d(TAG, "CPU 정보 (일부): " + cpuInfo.toString());
+            } catch (Exception e) {
+                Log.e(TAG, "CPU 정보 확인 중 오류: " + e.getMessage());
+            }
+
+            // 앱 정보 확인
+            try {
+                PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+                Log.d(TAG, "앱 버전: " + packageInfo.versionName + " (" + packageInfo.versionCode + ")");
+
+                ApplicationInfo appInfo = getPackageManager().getApplicationInfo(getPackageName(), 0);
+                Log.d(TAG, "앱 네이티브 라이브러리 경로: " + appInfo.nativeLibraryDir);
+                Log.d(TAG, "앱 데이터 경로: " + appInfo.dataDir);
+            } catch (Exception e) {
+                Log.e(TAG, "앱 정보 확인 중 오류: " + e.getMessage());
+            }
+
+            // AAR 파일 확인
+            try {
+                String[] aarNames = {"snpe-release.aar", "psnpe-release.aar", "qtld-release.aar", "platform-validator.aar"};
+                Log.d(TAG, "AAR 파일 확인:");
+                for (String aarName : aarNames) {
+                    try {
+                        InputStream is = getAssets().open("libs/" + aarName);
+                        Log.d(TAG, "AAR 파일 존재: " + aarName);
+                        is.close();
+                    } catch (IOException e) {
+                        Log.d(TAG, "AAR 파일 없음: " + aarName);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "AAR 파일 확인 중 오류: " + e.getMessage());
+            }
+
+            Log.d(TAG, "== 시스템 라이브러리 진단 완료 ==");
+
+        } catch (Exception e) {
+            Log.e(TAG, "시스템 라이브러리 진단 중 오류 발생: " + e.getMessage(), e);
+        }
     }
 }
