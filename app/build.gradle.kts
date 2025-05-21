@@ -39,6 +39,9 @@ android {
             excludes.add("META-INF/*.kotlin_module")
         }
         resources.pickFirsts.add("**/*.so")
+        resources.pickFirsts.add("lib/arm64-v8a/libhexagon_nn_skel.so")
+        resources.pickFirsts.add("lib/arm64-v8a/libhexagon_nn_skel_v65.so")
+        resources.pickFirsts.add("lib/arm64-v8a/libhexagon_nn_skel_v66.so")
         jniLibs.useLegacyPackaging = true
     }
 
@@ -74,4 +77,6 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-support:0.4.3")
 //    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.3")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.12.0") // GPU 가속 사용시
+
+    implementation ("org.tensorflow:tensorflow-lite-hexagon:2.12.0")
 }

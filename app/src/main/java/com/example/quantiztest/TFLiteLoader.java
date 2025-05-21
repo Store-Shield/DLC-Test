@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.util.Log;
 
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.HexagonDelegate;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -15,13 +16,16 @@ import java.io.OutputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
+
 public class TFLiteLoader {
     private static final String TAG = "TFLiteLoader";
+    private static final String checkde = "checkdede";
     private  String modelName;
 
     private Interpreter tflite;
     private MappedByteBuffer tfliteModel;
     private Context context;
+    private HexagonDelegate hexagonDelegate;
 
     public TFLiteLoader(Context context,String modelName) {
 
@@ -50,9 +54,34 @@ public class TFLiteLoader {
             options.setAllowFp16PrecisionForFp32(true);
 
             // CPU 기반 NNAPI 활성화 (API 27+)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            boolean hexagonEnabled = false;
+            try {
+                Log.d(TAG, "Trying to initialize Hexagon delegate...");
+
+                // 네이티브 라이브러리 로드 시도 (일부 기기에서 필요할 수 있음)
+                try {
+                    System.loadLibrary("tensorflowlite_hexagon_jni");
+                    Log.d(TAG, "tensorflowlite_hexagon_jni library loaded successfully");
+                } catch (UnsatisfiedLinkError e) {
+                    Log.w(TAG, "Failed to load tensorflowlite_hexagon_jni library: " + e.getMessage());
+                    // 이 오류는 무시해도 됨 - HexagonDelegate 생성자가 자동으로 처리할 수 있음
+                }
+
+                hexagonDelegate = new HexagonDelegate(context);
+                options.addDelegate(hexagonDelegate);
+                hexagonEnabled = true;
+                Log.d(checkde, "Hexagon delegate initialized successfully!");
+            } catch (UnsupportedOperationException e) {
+                Log.e(checkde, "Hexagon delegate is not supported on this device: " + e.getMessage());
+            } catch (Exception e) {
+                Log.e(checkde, "Error initializing Hexagon delegate: " + e.getMessage());
+                e.printStackTrace();
+            }
+
+            // Hexagon이 활성화되지 않았고 API 28+ 인 경우 NNAPI 폴백
+            if (!hexagonEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                 options.setUseNNAPI(true);
-                Log.d(TAG, "NNAPI enabled for " + modelName);
+                Log.d(TAG, "Falling back to NNAPI for " + modelName);
             }
 
             tflite = new Interpreter(tfliteModel, options);
@@ -132,6 +161,13 @@ public class TFLiteLoader {
      * 리소스를 해제합니다.
      */
     public void close() {
+        // Hexagon Delegate 정리
+        if (hexagonDelegate != null) {
+            Log.d(TAG, "Closing Hexagon delegate");
+            hexagonDelegate.close();
+            hexagonDelegate = null;
+        }
+
         if (tflite != null) {
             Log.d(TAG, "Closing TFLite interpreter");
             tflite.close();
